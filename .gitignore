@@ -47,6 +47,11 @@ logs/
 # 本地勘察产物（server jar / javap 输出）
 .tmp-mc/
 
-# 验收测试运行目录
+# 验收测试运行目录（完整服务端安装，体积大）
 run-server/
+tools/acceptance/run-server/
+
+# 子代理的临时验证程序与产物
+scratch/
+tools/audit/out/
 

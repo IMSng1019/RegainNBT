@@ -77,7 +77,28 @@
 |---|---|---|
 | `CustomPotionEffects`（物品） | 药水自定义效果全丢（DFU 把它塞进 custom_data） | `minecraft:potion_contents.custom_effects` |
 | `ActiveEffects`（实体） | 怪物状态效果全丢 | `active_effects` |
-| 信标 `Primary` / `Secondary` | 信标效果丢失 | 见 26.3 `BeaconBlockEntity` 的读取键 |
+| 信标 `Primary` / `Secondary` | 信标效果丢失 | `primary_effect` / `secondary_effect`（字符串，再过 BEACON_EFFECTS 白名单） |
+
+### ⚠️ 26.3 复核后的两处修正（有实测证据）
+
+1. **这三组旧键属于「1.20.2 之前」的写法，不是 1.20.4 的写法。**
+   真实 1.20.4 服务端 jar（world_version=3700）里活代码用的是现代形状：物品 `custom_potion_effects`、
+   实体 `active_effects`、信标 `primary_effect`/`secondary_effect`，效果 id 是**字符串**；旧名只出现在 DataFix 类里。
+   数字化 id 是 1.20.2 之前的形状。原版 `MobEffectIdFix` 注册在 schema **3568**，而我们的源版本是 3700，
+   所以 DFU 不会执行它 —— 这就是「DFU 不转」的成因。
+   → 规则对真·1.20.4 写法是**安全 no-op**，真正救的是更老的命令 / 存档里遗留的旧 NBT（否则数据静默丢失）。
+   意图检测因此把 `CustomPotionEffects` 当**旧版信号**（在 26.3 和 1.20.4 下它都不是合法键）。
+
+2. **ID 改名的 1.20.4 域内缺口为 0**：`grass` 不是 1.20.4 的 ID（改名发生在 1.20.3）。
+   1.20.4 域内被 DFU 改名的是 `scute` / `chain`，内置表因此只需补 `grass` 这类 pre-1.20.3 兼容项
+   （审计脚本会自动派生两个输入域并分开统计，见 tools/audit/README.md）。
+
+### 纯 ID 改名路径（必须与 NBT 翻译分开）
+
+`/give Steve scute` 这类**只有旧 ID、没有 NBT 载荷**的命令，新版解析会失败（Unknown item），
+但命令里没有任何可翻译的复合标签。翻译器必须单独处理：定位物品/方块 ID token →
+`IdRenames.resolveItemId/resolveBlockId` → 仅当结果变化才替换 → reparse 验证后才采用。
+（数据包函数里这种行如果不管，会让整个数据包加载失败。）
 
 ## 6. 26.3 API 备忘（已用 javap 复核）
 
@@ -95,6 +116,7 @@
     net.minecraft.SharedConstants#WORLD_VERSION
     net.minecraft.resources.Identifier                     // 26.x 里叫 Identifier，不是 ResourceLocation
     net.minecraft.server.permissions.PermissionSet#ALL_PERMISSIONS
+    net.minecraft.SharedConstants#getCurrentVersion().dataVersion().version()   // = 5023；WORLD_VERSION 已 @Deprecated
     net.minecraft.commands.functions.CommandFunction#fromLines(Identifier, CommandDispatcher, T, List<String>)
     net.minecraft.commands.CommandBuildContext#simple(HolderLookup.Provider, FeatureFlagSet)
 

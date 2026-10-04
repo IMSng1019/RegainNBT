@@ -24,6 +24,25 @@ public record PatchContext(PayloadKind kind, CompoundTag legacy, CompoundTag fix
 		return legacy == null ? null : legacy.get(key);
 	}
 
+	/** 记录一步成功的关键过程（规则内部用）。 */
+	public void step(String message) {
+		if (report != null) {
+			report.step(message);
+		}
+	}
+
+	/** 记录一条需要管理员注意的问题（未知数字 id、无法转换的条目等）。 */
+	public void warn(String message) {
+		if (report != null) {
+			report.warn(message);
+		}
+	}
+
+	/** 命令里的原始 1.20.4 NBT；没有就是空复合标签（规则可以安全地读）。 */
+	public CompoundTag legacyOrEmpty() {
+		return legacy == null ? new CompoundTag() : legacy;
+	}
+
 	/** 物品规则要写进 components 子标签；实体/方块实体规则直接写 fixed 本身。 */
 	public CompoundTag target() {
 		if (kind == PayloadKind.ITEM) {

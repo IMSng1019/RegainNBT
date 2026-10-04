@@ -4,6 +4,11 @@ package regainnbt.translate;
 public enum PayloadKind {
 	/** 物品参数（/give、/item ... with）：命中 DFU 的 ITEM_STACK。 */
 	ITEM,
+	/**
+	 * 物品<b>谓词</b>参数（/clear、/execute if items ...）：只有物品 ID token、没有 NBT，走 IdRenames 改名。
+	 * 26.3 没有公开的取值口，验证用「原文解析失败 + 译文 reparse 通过」的 A/B。
+	 */
+	ITEM_PREDICATE,
 	/** 实体复合标签（/summon、/data merge entity、选择器 nbt=）：注入 id 后命中 DFU 的 ENTITY。 */
 	ENTITY,
 	/** 方块实体复合标签（/data merge block）：注入方块实体 id 后命中 DFU 的 BLOCK_ENTITY。 */

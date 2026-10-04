@@ -1,0 +1,2 @@
+# item: names that are invalid in the target version and have no known target name
+# add verified entries to tools/audit/manual-fixes.json and re-run the generator
