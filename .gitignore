@@ -43,3 +43,10 @@ replay_*.log
 spike/libs/
 spike/out/
 logs/
+
+# 本地勘察产物（server jar / javap 输出）
+.tmp-mc/
+
+# 验收测试运行目录
+run-server/
+

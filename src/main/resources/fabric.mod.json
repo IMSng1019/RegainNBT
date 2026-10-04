@@ -3,36 +3,33 @@
 	"id": "regainnbt",
 	"version": "${version}",
 	"name": "RegainNBT",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "把为 1.20.4 写的 NBT 指令（聊天 / 命令方块 / RCON / 数据包函数）在新版服务端上透明翻译成当代组件语法。翻译由原版 DataFixerUpper 完成，本模组负责接线、兜底规则与路由。",
 	"authors": [
-		"Me!"
+		"RegainNBT"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/IMSng1019/RegainNBT",
+		"sources": "https://github.com/IMSng1019/RegainNBT"
 	},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"icon": "assets/regainnbt/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"regainnbt.modid.RegainNBT"
-		],
-		"client": [
-			"regainnbt.modid.client.RegainNBTClient"
+			"regainnbt.RegainNBT"
 		]
 	},
 	"mixins": [
 		"regainnbt.mixins.json",
 		{
-			"config": "regainnbt.client.mixins.json",
-			"environment": "client"
+			"config": "regainnbt.functions.mixins.json",
+			"environment": "*"
 		}
 	],
 	"depends": {
 		"fabricloader": ">=0.19.5",
-		"minecraft": "~1.20.4",
-		"java": ">=17",
+		"minecraft": "~26.3",
+		"java": ">=25",
 		"fabric-api": "*"
 	}
 }

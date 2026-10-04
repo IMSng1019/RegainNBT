@@ -1,13 +1,12 @@
 {
-	"required": true,
-	"package": "regainnbt.mixin",
+	"required": false,
+	"package": "regainnbt.mixin.functions",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
-		"CommandsMixin",
-		"BaseCommandBlockMixin"
+		"CommandFunctionMixin"
 	],
 	"injectors": {
-		"defaultRequire": 1
+		"defaultRequire": 0
 	},
 	"overwrites": {
 		"requireAnnotations": true
