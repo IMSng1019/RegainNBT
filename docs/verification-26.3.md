@@ -72,8 +72,26 @@
 | 层面 | 数量 | 结果 |
 |---|---|---|
 | JUnit（headless，真实 26.3 代码 + 真实 dispatcher） | **129** | 全绿（`gradlew test` 与 `tools/acceptance/run-junit.ps1` 两条路径） |
-| 端到端验收脚本 `tools/acceptance/run-acceptance.ps1` | 24 项断言（含 6 条数据包函数 fixtures） | `passed=24 failed=0`，exit 0（每次重建 world + 哨兵切窗，可重复跑） |
-| 独立验证者 A/B 差分（装模组 vs 纯 fabric-api 基线，138 条命令矩阵） | — | 现代语法 26 条与基线逐字一致；对抗输入无异常、无二次执行 |
+| 端到端验收脚本 `tools/acceptance/run-acceptance.ps1` | 26 项断言（含 9 条数据包函数 fixtures） | `passed=26 failed=0`，exit 0（每次重建 world + 哨兵切窗，可重复跑） |
+| 独立验证者 A/B 差分（装模组 vs 纯 fabric-api 基线，138+44 条命令矩阵） | — | 现代语法逐字一致、零翻译日志；对抗输入无异常、无二次执行 |
+
+### 独立验证（另一个 agent，只信自己跑出来的证据）
+
+对最终产物 jar 做「装模组服 vs 纯 fabric-api 无模组基线服」的逐命令差分（`/say` 哨兵切窗，UUID 归一化后逐字比对），
+并另建 RCON 客户端与配置关闭实例：
+
+- **现代语法零误伤**：全部现代命令与基线逐字一致，模组侧 0 条翻译日志（覆盖组件语法、`nbt={equipment}`、SNBT 文本组件、嵌套 execute、fill、粒子等）。
+- **旧语法落地**（`/data get` 断言，基线均失败或丢字段）：附魔 + `display.Name`、`HandItems→equipment`、容器 `Count→count`、
+  `CustomName` 引号 JSON → 组件、三条补丁规则、ID 改名、物品谓词（纯 ID 与带旧 NBT）。
+- **不重复执行**：用 `/tag … add` 真实计数（不是 `limit` 推断），控制台 / 命令方块（INTENT 与 EXPLICIT_MARK 两条路径）/ `execute…run` 回退路径都是 1→2。
+- **`old.` 与 strip**：回写幂等（永远是单个前缀）、strip 前后 `/data get block` 对比、strip 半径语义、strip 后重新上电会重新标记。
+- **配置**：`enabled=false` 完全不介入（行为 = 基线）、`translateDataPackFunctions=false`、`patchRules.*=false`、`disabledCommands` 均实测生效。
+- **对抗输入**：畸形 NBT、未闭合引号、4000 字符长命令、未知 ID、深层嵌套 → 全部优雅回退成与基线**逐字相同**的原版错误，零 Exception。
+- **精度矩阵**：20 条「不该命中」的谓词用例全部不命中（证明谓词旧键清理没有退化成「匹配所有实体」）。
+- 验证者先后报出 3 组反例（谓词静默不命中 / 物品谓词带旧 NBT / 大写 `Slot` 误判），**修复后复测全部通过**，
+  并对最后一个变更（`regainnbt` 根命令豁免路由）做了 44 条聚焦复验：无回归、无新反例。
+
+**最终产物**：`build/libs/regainnbt-1.0.0.jar`，sha256 `92BE79F43AFBF8C8829D68911AD67846D13E7DAC742047EC61A9681F66AC2E31`。
 | 意图检测探针（47 用例 + 11 健壮性） | 58 | 全 PASS；23 条现代反例**零误判** |
 | 路由探针（含缓存/负缓存/回写/executeRewritten） | 52 | 全 PASS |
 | 翻译器探针 Probe1–9 | 旧版 30/34 adopted（4 条为**明确拒绝**）、现代 11/11 未改写 | — |
