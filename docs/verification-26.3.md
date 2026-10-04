@@ -73,6 +73,11 @@
 |---|---|---|
 | JUnit（headless，真实 26.3 代码 + 真实 dispatcher） | **129** | 全绿（`gradlew test` 与 `tools/acceptance/run-junit.ps1` 两条路径） |
 | 端到端验收脚本 `tools/acceptance/run-acceptance.ps1` | 26 项断言（含 9 条数据包函数 fixtures） | `passed=26 failed=0`，exit 0（每次重建 world + 哨兵切窗，可重复跑） |
+| 意图检测探针（55 用例 + 11 健壮性） | 66 | 全 PASS；现代反例**零误判** |
+| 路由探针（缓存/负缓存/归一化/回写/executeRewritten/端到端） | 52 | 全 PASS |
+| 翻译器探针 Probe1–14（黄金用例 + 谓词 + ID 改名） | 旧版 30/34 adopted（4 条为**明确拒绝**）、现代 11/11 未改写 | — |
+| 补丁规则探针 | 31 | 全 PASS（补丁前后用 26.3 真实读取方对比） |
+| ID 改名探针 | 14 | 全 PASS |
 | 独立验证者 A/B 差分（装模组 vs 纯 fabric-api 基线，138+44 条命令矩阵） | — | 现代语法逐字一致、零翻译日志；对抗输入无异常、无二次执行 |
 
 ### 独立验证（另一个 agent，只信自己跑出来的证据）
@@ -91,12 +96,11 @@
 - 验证者先后报出 3 组反例（谓词静默不命中 / 物品谓词带旧 NBT / 大写 `Slot` 误判），**修复后复测全部通过**，
   并对最后一个变更（`regainnbt` 根命令豁免路由）做了 44 条聚焦复验：无回归、无新反例。
 
-**最终产物**：`build/libs/regainnbt-1.0.0.jar`，sha256 `92BE79F43AFBF8C8829D68911AD67846D13E7DAC742047EC61A9681F66AC2E31`。
-| 意图检测探针（47 用例 + 11 健壮性） | 58 | 全 PASS；23 条现代反例**零误判** |
-| 路由探针（含缓存/负缓存/回写/executeRewritten） | 52 | 全 PASS |
-| 翻译器探针 Probe1–9 | 旧版 30/34 adopted（4 条为**明确拒绝**）、现代 11/11 未改写 | — |
-| 补丁规则探针 | 31 | 全 PASS（补丁前后用 26.3 真实读取方对比） |
-| ID 改名探针 | 14 | 全 PASS |
+**最终产物**：`build/libs/regainnbt-1.0.0.jar`，sha256 `37D96749C7C5E8E4987A28C586179A4131D1E40026C13C8EB1C8D88743D71C68`。
+
+构建已开启**可复现归档**（`preserveFileTimestamps = false` + `reproducibleFileOrder = true`）：
+同一份源码执行 `gradlew clean build` 与 `gradlew clean jar` 得到**相同字节**的 jar，可直接用 sha256 校验发布产物。
+（此前记录过的 `92BE79F4…` 是同一源码树在增量构建下产出的 jar，功能一致，仅归档时间戳不同。）
 
 ---
 
