@@ -237,11 +237,17 @@ public final class Router {
 	}
 
 	private static boolean isCommandDisabled(RegainNBTConfig config, String command) {
-		if (config.disabledCommands == null || config.disabledCommands.isEmpty()) {
-			return false;
-		}
 		String root = rootOf(command);
 		if (root.isEmpty()) {
+			return false;
+		}
+		// 内建豁免：本模组自己的管理指令永不参与路由。
+		// 否则 /regainnbt why <旧命令> 这条外层命令会先被翻译（参数里的旧 NBT 会命中意图检测），
+		// 于是 why 拿到的是改写后的文本、诊断出 MODERN —— 独立验证者实测到过这个现象。
+		if (RegainNBT.MOD_ID.equals(root)) {
+			return true;
+		}
+		if (config.disabledCommands == null || config.disabledCommands.isEmpty()) {
 			return false;
 		}
 		if (config.isCommandDisabled(root)) {

@@ -1,2 +1,4 @@
-summon minecraft:zombie 6 -59 7 {equipment:{mainhand:{count:1,id:"minecraft:diamond_sword"}},Tags:["rnbt_pred"]}
-execute if entity @e[type=minecraft:zombie,tag=rnbt_pred,nbt={HandItems:[{id:"minecraft:diamond_sword",Count:1b}]}] run data merge block 6 -60 7 {rnbt_match:1b}
+summon minecraft:zombie 6 -59 7 {Tags:["rnbt-pred"],equipment:{mainhand:{id:"minecraft:diamond_sword",count:1}}}
+execute if entity @e[tag=rnbt-pred,nbt={HandItems:[{id:"minecraft:diamond_sword",Count:1b}]}] run data modify entity @e[tag=rnbt-pred,limit=1] Tags append value "RNBT-POSITIVE"
+execute if entity @e[tag=rnbt-pred,nbt={HandItems:[{id:"minecraft:golden_sword",Count:1b}]}] run data modify entity @e[tag=rnbt-pred,limit=1] Tags append value "RNBT-NEGATIVE"
+execute if entity @e[tag=rnbt-pred,nbt={equipment:{mainhand:{id:"minecraft:diamond_sword",count:1}}}] run data modify entity @e[tag=rnbt-pred,limit=1] Tags append value "RNBT-MODERN"

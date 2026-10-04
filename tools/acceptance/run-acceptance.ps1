@@ -156,6 +156,10 @@ if (-not (Test-Path $launcher)) {
 # 3. eula.txt + server.properties
 # ---------------------------------------------------------------------------
 Set-Content -Path (Join-Path $ServerDir "eula.txt") -Value "eula=true" -Encoding ASCII
+# NOTE: build this as its own statement. Inside an array literal PowerShell does not parse
+# "server-port=" + $ServerPort as one element, which silently produced an invalid properties line
+# ("25579=") plus a stray server-port entry (found by the independent verifier).
+$portLine = "server-port=" + $ServerPort
 $props = @(
     "online-mode=false",
     "enable-rcon=false",
@@ -171,7 +175,7 @@ $props = @(
     "simulation-distance=4",
     "sync-chunk-writes=false",
     "motd=RegainNBT acceptance",
-    "server-port=" + $ServerPort,
+    $portLine,
     "level-name=world"
 )
 Set-Content -Path (Join-Path $ServerDir "server.properties") -Value $props -Encoding ASCII

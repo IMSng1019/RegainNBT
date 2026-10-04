@@ -1,12 +1,21 @@
 # case: predicate_nbt_legacy
-# 目的: 选择器 nbt= 是「谓词」（所有键都要匹配），旧键残留会让条件永远不成立 ——
-#       所以谓词载荷里的 HandItems 必须被翻译成 equipment（T1 的 A 修复）；写数据载荷（/summon）则保持旧键不变。
-# 判别设计: 实体用【现代形状】生成（只有 equipment，没有 HandItems），于是
-#       谓词行若未被翻译 -> nbt={HandItems:...} 永远不匹配 -> 不会产生 rnbt_match（断言失败）
-#       谓词行若被翻译成 nbt={equipment:...} -> 匹配 -> data merge 合并出 rnbt_match（断言通过）
-# 注意: 本条的服务端断言未验证过（T6 只做了 headless 翻译核对，见 .translated.txt），若不过请把原始输出发回 T6。
-setup: kill @e[tag=rnbt_pred]
-setup: setblock 6 -60 7 minecraft:chest
+# 目的: 选择器 nbt= 是「谓词」（列出的键必须匹配，实体多出来的键不影响）——
+#       旧版 HandItems 谓词必须被翻译成 equipment，否则条件永远不成立。
+#       （T1 的 A 修复：谓词载荷清掉旧键；写数据载荷 /summon 仍保留旧键，形成对照）
+# 判别设计（顺序无关：三条标记 append 到 Tags，互不覆盖，谁先谁后都不影响断言 —— T1 建议的方案）:
+#   实体是【现代形状】（summon 行只有 equipment，没有 HandItems）。
+#   正例 旧版 HandItems 谓词（钻石剑）-> 翻译后应命中 -> append RNBT-POSITIVE
+#   负例 旧版 HandItems 谓词（金剑，故意不匹配）-> 翻译后不应命中 -> 不该出现 RNBT-NEGATIVE
+#   现代对照 equipment 谓词 -> 本就命中 -> append RNBT-MODERN（同时证明实体与谓词机制正常）
+# 断言解读:
+#   contains RNBT-POSITIVE     = 旧版谓词被翻译且能命中（翻译坏了 -> 不命中 -> 该标记不出现 -> 失败）
+#   contains RNBT-MODERN       = 现代谓词与实体本身正常（链路自检）
+#   not_contains RNBT-NEGATIVE = 不匹配的物品没有误命中（出现则是谓词匹配语义 bug，不是翻译问题）
+# 前提: append 要求 Tags 已存在（setup 的 summon 里有）；tag= 是列表成员判断，append 后仍能命中。
+# 注意: 本条的服务端断言尚未验证过（T6 只做了 headless 翻译 + 解析核对，见 .translated.txt），若不过请把 System chat 原始输出发回 T6。
+setup: kill @e[tag=rnbt-pred]
 run: function rnbt_acceptance:predicate_nbt_legacy
-probe: data get block 6 -60 7
-contains: rnbt_match: 1b
+probe: data get entity @e[tag=rnbt-pred,limit=1] Tags
+contains: RNBT-POSITIVE
+contains: RNBT-MODERN
+not_contains: RNBT-NEGATIVE

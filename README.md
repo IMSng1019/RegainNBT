@@ -66,16 +66,29 @@ RegainNBT 负责的是**接线**（规范化输入形状、按参数类型定位
 ## 配置 `config/regainnbt.json`
 
     {
-      "enabled": true,                  // 总开关，false = 完全不介入
-      "autoMarkCommandBlocks": true,    // 命令方块里判定为旧版的指令自动回写成 old. 前缀
-      "translateDataPackFunctions": true, // 数据包函数加载期逐行翻译
+      "enabled": true,
+      "autoMarkCommandBlocks": true,
+      "translateDataPackFunctions": true,
       "logTranslations": true,
       "logFailures": true,
       "cacheSize": 4096,
-      "sourceDataVersion": 3700,        // 1.20.4
-      "patchRules": {},                 // 例：{"beacon_effects": false}
-      "disabledCommands": []            // 例：["give"]，不接管的指令根名
+      "sourceDataVersion": 3700,
+      "patchRules": {},
+      "disabledCommands": []
     }
+
+| 字段 | 含义 |
+|---|---|
+| `enabled` | 总开关。false = 完全不介入（行为与不装模组一致） |
+| `autoMarkCommandBlocks` | 命令方块里判定为旧版的指令是否自动回写成 `old.` 前缀 |
+| `translateDataPackFunctions` | 数据包函数是否在加载期逐行翻译 |
+| `logTranslations` / `logFailures` | 成功 / 失败的日志开关 |
+| `cacheSize` | 路由缓存容量（含翻译失败的负缓存） |
+| `sourceDataVersion` | 源数据版本，1.20.4 = 3700 |
+| `patchRules` | 第 2 层补丁规则开关，例：`{"beacon_effects": false}` |
+| `disabledCommands` | 不接管的指令根名，例：`["give"]`（`/regainnbt` 自身始终不参与路由） |
+
+> 注：配置文件由 Gson 读写，**首次启动会把注释与未知字段重写成规范形式**，属正常现象。
 
 ## 指令
 
