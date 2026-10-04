@@ -1,0 +1,12 @@
+# case: predicate_nbt_legacy
+# 目的: 选择器 nbt= 是「谓词」（所有键都要匹配），旧键残留会让条件永远不成立 ——
+#       所以谓词载荷里的 HandItems 必须被翻译成 equipment（T1 的 A 修复）；写数据载荷（/summon）则保持旧键不变。
+# 判别设计: 实体用【现代形状】生成（只有 equipment，没有 HandItems），于是
+#       谓词行若未被翻译 -> nbt={HandItems:...} 永远不匹配 -> 不会产生 rnbt_match（断言失败）
+#       谓词行若被翻译成 nbt={equipment:...} -> 匹配 -> data merge 合并出 rnbt_match（断言通过）
+# 注意: 本条的服务端断言未验证过（T6 只做了 headless 翻译核对，见 .translated.txt），若不过请把原始输出发回 T6。
+setup: kill @e[tag=rnbt_pred]
+setup: setblock 6 -60 7 minecraft:chest
+run: function rnbt_acceptance:predicate_nbt_legacy
+probe: data get block 6 -60 7
+contains: rnbt_match: 1b

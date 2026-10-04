@@ -1,0 +1,8 @@
+# case: splice_continuation
+# 目的: 反斜杠续行必须先拼成一条逻辑行再翻译（只测函数路径）
+# 说明: 若不拼接，这条命令会解析失败、整个数据包加载报错；若拼接后不翻译，则读不到 custom_name
+setup: setblock 6 -60 2 minecraft:air
+run: function rnbt_acceptance:splice_continuation
+probe: data get block 6 -60 2 Items[0]
+contains: minecraft:custom_name
+contains: count: 3

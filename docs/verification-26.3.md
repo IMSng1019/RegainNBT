@@ -51,7 +51,12 @@
 
 - **纯 ID 改名**：`/give Steve scute` → 翻译成 `give Steve minecraft:turtle_scute`（随后才报 "No player was found"，证明解析已通过）；
   `/regainnbt why give Steve scute` 打印新版原始错误 `Unknown item 'minecraft:scute'` + 翻译路径。
-- **物品谓词**（`ItemPredicateArgument`，另一种没有 NBT 的参数）：真实服务端上
+- **选择器 `nbt=` 谓词的语义恢复**：翻译 `execute if entity @e[tag=predz,nbt={HandItems:[{id:"minecraft:diamond_sword",Count:1b}]}]` 时
+  删掉已无读取方的 `HandItems`（只留 DFU 生成的 `equipment`），实测**能匹配到真的拿着那把剑的僵尸**（`RNBT-PRED-MATCH` 触发）；
+  反例（同形但 `stone`）**不触发**，证明没有退化成「匹配所有实体」；现代谓词 `nbt={NoAI:1b}` 不被改写。
+- **物品谓词带旧 NBT**（`ItemPredicateArgument` 的 `id{旧NBT}`）：`execute if items block ... diamond_sword{Enchantments:[{id:"...",lvl:2}]}`
+  翻译后**能匹配**（`RNBT-PRED-NBT-OK` 触发），`lvl:5` 的反例不触发（精度保持）。
+- **物品谓词纯 ID**（`ItemPredicateArgument`，另一种没有 NBT 的参数）：真实服务端上
   `execute if items block ... container.* grass run say RNBT-ITEMS-LEGACY-OK` 被翻译成 `... container.* minecraft:short_grass ...` 并**成功触发**，
   与直接用现代 ID 的对照命令输出完全一致；`clear Steve grass` → `clear Steve minecraft:short_grass`、`clear Steve scute` → `minecraft:turtle_scute`，全程无 `Unknown item`。
 - **数据包函数加载期翻译**：往 `world/datapacks` 放一个含旧写法的 `.mcfunction`，`/reload` 后函数**加载期**即被逐行翻译
@@ -67,7 +72,8 @@
 | 层面 | 数量 | 结果 |
 |---|---|---|
 | JUnit（headless，真实 26.3 代码 + 真实 dispatcher） | **129** | 全绿（`gradlew test` 与 `tools/acceptance/run-junit.ps1` 两条路径） |
-| 端到端验收脚本 `tools/acceptance/run-acceptance.ps1` | 16 项断言 | `passed=16 failed=0`，exit 0（每次重建 world + 哨兵切窗，可重复跑） |
+| 端到端验收脚本 `tools/acceptance/run-acceptance.ps1` | 24 项断言（含 6 条数据包函数 fixtures） | `passed=24 failed=0`，exit 0（每次重建 world + 哨兵切窗，可重复跑） |
+| 独立验证者 A/B 差分（装模组 vs 纯 fabric-api 基线，138 条命令矩阵） | — | 现代语法 26 条与基线逐字一致；对抗输入无异常、无二次执行 |
 | 意图检测探针（47 用例 + 11 健壮性） | 58 | 全 PASS；23 条现代反例**零误判** |
 | 路由探针（含缓存/负缓存/回写/executeRewritten） | 52 | 全 PASS |
 | 翻译器探针 Probe1–9 | 旧版 30/34 adopted（4 条为**明确拒绝**）、现代 11/11 未改写 | — |

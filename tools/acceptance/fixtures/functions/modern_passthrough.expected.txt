@@ -1,0 +1,7 @@
+# case: modern_passthrough
+# 目的: 现代形状（小写 count）必须原样放行 —— 回归锚点，防「误改写现代 NBT」
+setup: setblock 6 -60 5 minecraft:air
+run: function rnbt_acceptance:modern_passthrough
+probe: data get block 6 -60 5 Items[0]
+contains: minecraft:diamond
+contains: count: 1

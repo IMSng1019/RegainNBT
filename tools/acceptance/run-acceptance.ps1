@@ -33,12 +33,17 @@ param(
     [switch]$KeepWorld,
     [switch]$KeepRun,
     # Killing leftover servers can destroy a teammate's run, so it is opt-in.
-    [switch]$ForceCleanup
+    [switch]$ForceCleanup,
+    # Per-line function fixtures (T6 format: <case>.mcfunction + <case>.expected.txt).
+    [string]$FixtureDir = "",
+    # Own port/dir so several agents can run acceptance side by side without touching each other.
+    [int]$ServerPort = 25565
 )
 
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 if (-not $ServerDir) { $ServerDir = Join-Path $root "tools\acceptance\run-server" }
+if (-not $FixtureDir) { $FixtureDir = Join-Path $root "tools\acceptance\fixtures\functions" }
 $jdk = Join-Path $env:USERPROFILE ".gradle\jdks\eclipse_adoptium-25-amd64-windows.2"
 $javaExe = Join-Path $jdk "bin\java.exe"
 $log = Join-Path $ServerDir "console.log"
@@ -94,11 +99,15 @@ function Stop-ServerProcess($proc) {
     }
 }
 
-# A leftover server (from an aborted run, or a teammate's run) would make this boot fail to bind
-# port 25565. Never kill it silently: refuse by default, -ForceCleanup to take over.
-$leftovers = Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like "*fabric-server-launch.jar*" }
-if ($leftovers) {
+# If MY port is already taken (a leftover run, or a teammate's server on the same port), never kill it
+# silently: refuse by default, -ForceCleanup to take over. A server on another port is none of my business.
+$portBusy = $null -ne (Get-NetTCPConnection -LocalPort $ServerPort -ErrorAction SilentlyContinue)
+$leftovers = @()
+if ($portBusy) {
+    $leftovers = @(Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like "*fabric-server-launch.jar*" })
+}
+if ($portBusy) {
     if ($ForceCleanup) {
         foreach ($leftover in $leftovers) {
             Write-Output ("=== killing leftover server pid " + $leftover.ProcessId)
@@ -109,7 +118,7 @@ if ($leftovers) {
         foreach ($leftover in $leftovers) {
             Write-Output ("a fabric server is already running: pid " + $leftover.ProcessId)
         }
-        Write-Output "refusing to start (it would fight for port 25565); rerun with -ForceCleanup to take over"
+        Write-Output ("refusing to start (port " + $ServerPort + " is in use); rerun with -ForceCleanup to take over, or pass -ServerPort")
         exit 2
     }
 }
@@ -162,6 +171,7 @@ $props = @(
     "simulation-distance=4",
     "sync-chunk-writes=false",
     "motd=RegainNBT acceptance",
+    "server-port=" + $ServerPort,
     "level-name=world"
 )
 Set-Content -Path (Join-Path $ServerDir "server.properties") -Value $props -Encoding ASCII
@@ -189,6 +199,26 @@ foreach ($dirName in @("function", "functions")) {
     Set-Content -Path (Join-Path $fnDir "legacy.mcfunction") -Encoding ASCII -Value $functionLine
 }
 Write-Output "=== datapack fixture written (rnbt_acceptance:legacy)"
+
+# Per-line fixtures (T6 format). Files are copied byte-exact: splice_continuation.mcfunction relies on a
+# trailing backslash at the end of a physical line.
+$fixtureCases = @()
+if (Test-Path $FixtureDir) {
+    $fixtureCases = @(Get-ChildItem $FixtureDir -Filter "*.expected.txt" | Sort-Object Name)
+    foreach ($case in $fixtureCases) {
+        $fixtureName = $case.Name -replace ".expected.txt$", ""
+        $fixtureFile = Join-Path $FixtureDir ($fixtureName + ".mcfunction")
+        if (-not (Test-Path $fixtureFile)) { continue }
+        foreach ($dirName in @("function", "functions")) {
+            $fnDir = Join-Path $packRoot ("data\rnbt_acceptance\" + $dirName)
+            New-Item -ItemType Directory -Force -Path $fnDir | Out-Null
+            Copy-Item $fixtureFile -Destination (Join-Path $fnDir ($fixtureName + ".mcfunction")) -Force
+        }
+    }
+    Write-Output ("=== function fixtures copied: " + $fixtureCases.Count + " case(s) from " + $FixtureDir)
+} else {
+    Write-Output ("=== no function fixtures at " + $FixtureDir + " (skipping that phase)")
+}
 
 # ---------------------------------------------------------------------------
 # 4. mods: our jar + fabric-api (must be the 26.3 build!)
@@ -273,8 +303,7 @@ $script:cmds = @(
     "/data get entity @e[type=minecraft:zombie,limit=1]",
     $control,
     "/function rnbt_acceptance:legacy",
-    "/data get block 6 -60 0 Items[0]",
-    "/stop"
+    "/data get block 6 -60 0 Items[0]"
 )
 $script:preCmds = @("/regainnbt status")
 
@@ -288,6 +317,50 @@ foreach ($cmd in ($script:preCmds + $script:cmds)) {
     Start-Sleep -Milliseconds 300
 }
 Start-Sleep -Seconds 3
+
+# ---------------------------------------------------------------------------
+# 6b. per-line function fixtures: setup / run / probe, each delimited by its own marker
+# ---------------------------------------------------------------------------
+$script:fixtureMarkers = New-Object System.Collections.ArrayList
+$script:fixturePlans = New-Object System.Collections.ArrayList
+foreach ($case in $fixtureCases) {
+    $fixtureName = $case.Name -replace ".expected.txt$", ""
+    $spec = @{ name = $fixtureName; setup = @(); run = @(); probe = @(); contains = @(); notContains = @() }
+    foreach ($raw in (Get-Content $case.FullName -Encoding UTF8)) {
+        $line = $raw.Trim()
+        if ($line.Length -eq 0 -or $line.StartsWith("#")) { continue }
+        $sep = $line.IndexOf(":")
+        if ($sep -lt 0) { continue }
+        $key = $line.Substring(0, $sep).Trim()
+        $value = $line.Substring($sep + 1).Trim()
+        switch ($key) {
+            "setup" { $spec.setup += $value }
+            "run" { $spec.run += $value }
+            "probe" { $spec.probe += $value }
+            "contains" { $spec.contains += $value }
+            "not_contains" { $spec.notContains += $value }
+        }
+    }
+    $steps = New-Object System.Collections.ArrayList
+    foreach ($step in @("setup", "run", "probe")) {
+        $commands = $spec[$step]
+        foreach ($command in $commands) {
+            if (-not $command) { continue }
+            $marker = "RNBT-FIX-" + $fixtureName + "-" + $step
+            [void]$script:fixtureMarkers.Add($marker)
+            [void]$steps.Add($marker)
+            try { $proc.StandardInput.WriteLine("/" + $command) } catch {}
+            Start-Sleep -Milliseconds $CommandWaitMs
+            try { $proc.StandardInput.WriteLine("/say " + $marker) } catch {}
+            Start-Sleep -Milliseconds 300
+        }
+    }
+    $spec.markers = $steps
+    [void]$script:fixturePlans.Add($spec)
+}
+# /stop last: it has no marker because the server is already gone when the sentinel would run
+try { $proc.StandardInput.WriteLine("/stop") } catch {}
+Start-Sleep -Seconds 4
 
 # ---------------------------------------------------------------------------
 # 7. slice the log by sentinels (output of command N is between sentinel N-1 and N)
@@ -327,7 +400,22 @@ $wDataEntity = Window 10
 $wControl = Window 11
 $wFunction = Window 12
 $wDataFunction = Window 13
-$wStop = Window 14
+
+# fixture windows: walk the fixture markers in send order, each window ends at its own marker
+$fixtureWindows = @{}
+$cursor = 0
+if ($sentinelIndex.ContainsKey(13)) { $cursor = $sentinelIndex[13] }
+foreach ($marker in $script:fixtureMarkers) {
+    for ($i = $cursor + 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Contains($marker)) {
+            if ($i -gt $cursor + 1) { $fixtureWindows[$marker] = (($lines[($cursor + 1)..($i - 1)]) -join " | ") } else { $fixtureWindows[$marker] = "" }
+            $cursor = $i
+            break
+        }
+    }
+}
+$wStop = ""
+if ($cursor -lt $lines.Count - 1) { $wStop = (($lines[($cursor + 1)..($lines.Count - 1)]) -join " | ") }
 
 # ---------------------------------------------------------------------------
 # 8. assertions
@@ -356,6 +444,22 @@ $modernOk = ($wControl.Contains("No player was found")) -and (-not $wControl.Con
 Add-Check "control: modern syntax is NOT rewritten (only vanilla no-player error)" $modernOk $wControl
 Add-Check "T6 datapack function loaded (rnbt_acceptance:legacy)" (($wFunction.Contains("Unknown function") -eq $false) -and ($wFunction.Contains("System chat"))) $wFunction
 Add-Check "T6 function line translated at load time (Count:3b -> count:3)" (($wDataFunction.Contains("count: 3")) -and (-not $wDataFunction.Contains("Count: 3b"))) $wDataFunction
+foreach ($spec in $script:fixturePlans) {
+    $runMarker = "RNBT-FIX-" + $spec.name + "-run"
+    $probeMarker = "RNBT-FIX-" + $spec.name + "-probe"
+    $runWindow = if ($fixtureWindows.ContainsKey($runMarker)) { $fixtureWindows[$runMarker] } else { "" }
+    $probeWindow = if ($fixtureWindows.ContainsKey($probeMarker)) { $fixtureWindows[$probeMarker] } else { "" }
+    $ok = $true
+    $why = ""
+    if ($runWindow.Contains("Unknown function")) { $ok = $false; $why += "function not loaded; " }
+    foreach ($needle in $spec.contains) {
+        if (-not $probeWindow.Contains($needle)) { $ok = $false; $why += ("missing [" + $needle + "]; ") }
+    }
+    foreach ($needle in $spec.notContains) {
+        if ($probeWindow.Contains($needle)) { $ok = $false; $why += ("unexpected [" + $needle + "]; ") }
+    }
+    Add-Check ("T6 fixture: " + $spec.name) $ok ($why + "probe=" + $probeWindow)
+}
 Add-Check "/stop accepted" (($wStop.Contains("Stopping the server")) -or ($wStop.Contains("Saving"))) $wStop
 
 # ---------------------------------------------------------------------------

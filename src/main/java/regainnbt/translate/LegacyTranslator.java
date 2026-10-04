@@ -115,42 +115,50 @@ public final class LegacyTranslator {
 	 * @param textComponent 文本组件是否要求「不再是 JSON 字面量」
 	 */
 	public record Expectation(PayloadKind kind, String argumentName, int start, int end, Set<String> keys,
-			String blockId, String itemId, String legacySnbt, boolean textComponent) {
+			Set<String> absentKeys, String blockId, String itemId, String legacySnbt, boolean textComponent) {
 
 		Expectation shift(int delta) {
-			return new Expectation(kind, argumentName, start + delta, end + delta, keys, blockId, itemId, legacySnbt,
-				textComponent);
+			return new Expectation(kind, argumentName, start + delta, end + delta, keys, absentKeys, blockId, itemId,
+				legacySnbt, textComponent);
 		}
 
 		static Expectation item(String argumentName, Set<String> componentIds) {
-			return new Expectation(PayloadKind.ITEM, argumentName, 0, 0, componentIds, null, null, null, false);
+			return new Expectation(PayloadKind.ITEM, argumentName, 0, 0, componentIds, Set.of(), null, null, null,
+				false);
 		}
 
 		/** 只有 ID、没有 NBT 的物品参数：断言 reparse 后确实是改名后的物品。 */
 		static Expectation itemId(String argumentName, String itemId) {
-			return new Expectation(PayloadKind.ITEM, argumentName, 0, 0, Set.of(), null, itemId, null, false);
+			return new Expectation(PayloadKind.ITEM, argumentName, 0, 0, Set.of(), Set.of(), null, itemId, null, false);
 		}
 
 		/**
 		 * 物品谓词（/clear、/execute if items）的纯 ID 改名：26.3 没有公开的取值口，
 		 * 用「原命令解析失败（legacySnbt 存原文）+ 译文 reparse 通过」的 A/B 断言改名确有必要且有效。
 		 */
-		static Expectation itemPredicateId(String argumentName, String itemId, String originalCommand) {
-			return new Expectation(PayloadKind.ITEM_PREDICATE, argumentName, 0, 0, Set.of(), null, itemId,
-				originalCommand, false);
+		static Expectation itemPredicateId(String argumentName, String expectedToken, String originalCommand) {
+			return new Expectation(PayloadKind.ITEM_PREDICATE, argumentName, 0, 0, Set.of(), Set.of(), null,
+				expectedToken, originalCommand, false);
 		}
 
 		static Expectation compound(PayloadKind kind, String argumentName, Set<String> keys, String legacySnbt) {
-			return new Expectation(kind, argumentName, 0, 0, keys, null, null, legacySnbt, false);
+			return compound(kind, argumentName, keys, Set.of(), legacySnbt);
+		}
+
+		/** @param absentKeys 必须**不**出现的旧键（谓词载荷清理后） */
+		static Expectation compound(PayloadKind kind, String argumentName, Set<String> keys, Set<String> absentKeys,
+				String legacySnbt) {
+			return new Expectation(kind, argumentName, 0, 0, keys, absentKeys, null, null, legacySnbt, false);
 		}
 
 		static Expectation block(String argumentName, String blockId, String legacySnbt) {
-			return new Expectation(PayloadKind.BLOCK_STATE, argumentName, 0, 0, Set.of(), blockId, null, legacySnbt,
-				false);
+			return new Expectation(PayloadKind.BLOCK_STATE, argumentName, 0, 0, Set.of(), Set.of(), blockId, null,
+				legacySnbt, false);
 		}
 
 		static Expectation text(String argumentName) {
-			return new Expectation(PayloadKind.TEXT_COMPONENT, argumentName, 0, 0, Set.of(), null, null, null, true);
+			return new Expectation(PayloadKind.TEXT_COMPONENT, argumentName, 0, 0, Set.of(), Set.of(), null, null, null,
+				true);
 		}
 	}
 
@@ -256,6 +264,10 @@ public final class LegacyTranslator {
 		}
 	}
 
+	/** 物品链的产物：现代语法 token + 出现的组件 id（供验证断言）。 */
+	private record ModernItem(String rendered, Set<String> componentIds) {
+	}
+
 	/** /give、/item ... with（ITEM）：{id, Count:1b, tag:{...}} -> components -> id[comp=value,...]。 */
 	private static void translateItem(CommandShape.Segment segment, String payload, TranslationReport report,
 			List<Replacement> replacements) throws CommandSyntaxException {
@@ -263,19 +275,10 @@ public final class LegacyTranslator {
 		if (item == null) {
 			return; // 现代 id[组件=...] 语法
 		}
-		String resolved = IdRenames.resolveItemId(item.itemToken(), report);
-		if (resolved == null || resolved.isEmpty()) {
-			report.warn("物品 ID 无法解析，放弃翻译: " + item.itemToken());
-			return;
-		}
-		resolved = Normalizer.namespace(resolved);
-		if (!BuiltInRegistriesBridge.itemExists(resolved)) {
-			report.warn("物品 ID 在目标版本不存在，放弃翻译: " + resolved + "（原 token " + item.itemToken() + "）");
-			return;
-		}
 		if (item.nbtText() == null) {
 			// 只有 ID、没有 NBT：只有真的发生改名才动它（现代命令因此不会被改写）
-			if (resolved.equals(Normalizer.namespace(item.itemToken()))) {
+			String resolved = resolveItemIdOrWarn(item.itemToken(), report, "ITEM(" + segment.argumentName() + ")");
+			if (resolved == null || resolved.equals(Normalizer.namespace(item.itemToken()))) {
 				return;
 			}
 			report.step("ITEM(" + segment.argumentName() + ") 仅 ID 改名 " + item.itemToken() + " -> " + resolved);
@@ -283,9 +286,81 @@ public final class LegacyTranslator {
 				List.of(Expectation.itemId(segment.argumentName(), resolved))));
 			return;
 		}
-		CompoundTag legacyTag = TagParser.parseCompoundFully(item.nbtText());
-		if (legacyTag.isEmpty()) {
+		ModernItem modern = buildModernItem(item.itemToken(), item.nbtText(), report,
+			"ITEM(" + segment.argumentName() + ")");
+		if (modern == null) {
 			return;
+		}
+		replacements.add(new Replacement(segment.start(), segment.end(), modern.rendered(),
+			List.of(Expectation.item(segment.argumentName(), modern.componentIds()))));
+	}
+
+	/**
+	 * /clear、/execute if items、/execute if items block ... 的物品谓词（ITEM_PREDICATE）：
+	 * 两种 1.20.4 写法都要接 —— 纯 ID（改名）与 {@code id{NBT}}（走完整物品链：{id,Count,tag} -> DFU -> id[组件]）。
+	 */
+	private static void translateItemPredicate(CommandShape.Segment segment, String payload, String command,
+			TranslationReport report, List<Replacement> replacements) throws CommandSyntaxException {
+		String token = payload.trim();
+		if (token.isEmpty() || token.indexOf('#') >= 0) {
+			return; // 标签谓词（#tag）：不动
+		}
+		// splitItem 自己会区分：id[组件] -> null（现代）；id{...} / 纯 ID -> 需要处理
+		Normalizer.ItemPayload item = Normalizer.splitItem(token);
+		if (item == null) {
+			return;
+		}
+		if (item.nbtText() == null) {
+			String resolved = resolveItemIdOrWarn(item.itemToken(), report,
+				"ITEM_PREDICATE(" + segment.argumentName() + ")");
+			if (resolved == null || resolved.equals(Normalizer.namespace(item.itemToken()))) {
+				return; // 本来就合法：不改写
+			}
+			report.step("ITEM_PREDICATE(" + segment.argumentName() + ") 仅 ID 改名 " + token + " -> " + resolved);
+			replacements.add(new Replacement(segment.start(), segment.end(), resolved,
+				List.of(Expectation.itemPredicateId(segment.argumentName(), resolved, command))));
+			return;
+		}
+		// id{NBT}：与 ITEM 完全同路
+		ModernItem modern = buildModernItem(item.itemToken(), item.nbtText(), report,
+			"ITEM_PREDICATE(" + segment.argumentName() + ")");
+		if (modern == null) {
+			return;
+		}
+		report.step("ITEM_PREDICATE(" + segment.argumentName() + ") 谓词带旧 NBT: " + token + " -> "
+			+ modern.rendered());
+		replacements.add(new Replacement(segment.start(), segment.end(), modern.rendered(),
+			List.of(Expectation.itemPredicateId(segment.argumentName(), modern.rendered(), command))));
+	}
+
+	/** 物品 ID 解析 + 注册表校验；失败时写 warn 并返回 null。 */
+	private static String resolveItemIdOrWarn(String rawToken, TranslationReport report, String label) {
+		String resolved = IdRenames.resolveItemId(rawToken, report);
+		if (resolved == null || resolved.isEmpty()) {
+			report.warn(label + " 物品 ID 无法解析，放弃翻译: " + rawToken);
+			return null;
+		}
+		resolved = Normalizer.namespace(resolved);
+		if (!BuiltInRegistriesBridge.itemExists(resolved)) {
+			report.warn(label + " 物品 ID 在目标版本不存在，放弃翻译: " + resolved + "（原 token " + rawToken + "）");
+			return null;
+		}
+		return resolved;
+	}
+
+	/**
+	 * 旧物品 NBT 的完整链（报告 §2.2 的形状要求）：{@code {id, Count:1b, tag:{...}}} -> DFU ITEM_STACK
+	 * -> 补丁 -> {@code id[组件=值,...]}；DFU 静默原样返回（没有 components）时返回 null，绝不采用。
+	 */
+	private static ModernItem buildModernItem(String rawToken, String nbtText, TranslationReport report, String label)
+			throws CommandSyntaxException {
+		String resolved = resolveItemIdOrWarn(rawToken, report, label);
+		if (resolved == null) {
+			return null;
+		}
+		CompoundTag legacyTag = TagParser.parseCompoundFully(nbtText);
+		if (legacyTag.isEmpty()) {
+			return null;
 		}
 		CompoundTag legacyStack = new CompoundTag();
 		legacyStack.putString("id", resolved);
@@ -298,49 +373,19 @@ public final class LegacyTranslator {
 		CompoundTag components = fixed.getCompound("components").orElse(null);
 		if (components == null || components.isEmpty()) {
 			report.warn("DFU 对物品 " + resolved + " 没有产出 components（静默原样返回），不采用");
-			return;
+			return null;
 		}
 		String rendered = Serializer.renderItem(fixed);
 		if (rendered == null) {
 			report.warn("物品序列化失败: " + resolved);
-			return;
+			return null;
 		}
-		report.step("ITEM(" + segment.argumentName() + ") " + item.itemToken() + " 旧键 " + legacyTag.keySet()
-			+ " -> components " + components.keySet());
-		Set<String> expectedComponents = new LinkedHashSet<>();
+		report.step(label + " " + rawToken + " 旧键 " + legacyTag.keySet() + " -> components " + components.keySet());
+		Set<String> componentIds = new LinkedHashSet<>();
 		for (String key : components.keySet()) {
-			expectedComponents.add(Normalizer.namespace(key));
+			componentIds.add(Normalizer.namespace(key));
 		}
-		replacements.add(new Replacement(segment.start(), segment.end(), rendered,
-			List.of(Expectation.item(segment.argumentName(), expectedComponents))));
-	}
-
-	/**
-	 * /clear、/execute if items 的物品谓词（ITEM_PREDICATE）：只有 ID token，走 IdRenames 改名。
-	 * 只在真的改名时才替换（现代命令因此不会被无意义改写），改名后仍要 reparse 通过才采用。
-	 */
-	private static void translateItemPredicate(CommandShape.Segment segment, String payload, String command,
-			TranslationReport report, List<Replacement> replacements) {
-		String token = payload.trim();
-		if (token.isEmpty() || token.indexOf('[') >= 0 || token.indexOf('#') >= 0 || token.indexOf('{') >= 0) {
-			return; // 现代组件谓词 / 标签谓词，不动
-		}
-		String resolved = IdRenames.resolveItemId(token, report);
-		if (resolved == null || resolved.isEmpty()) {
-			report.warn("物品谓词 ID 无法解析，放弃翻译: " + token);
-			return;
-		}
-		resolved = Normalizer.namespace(resolved);
-		if (!BuiltInRegistriesBridge.itemExists(resolved)) {
-			report.warn("物品谓词 ID 在目标版本不存在，放弃翻译: " + resolved + "（原 token " + token + "）");
-			return;
-		}
-		if (resolved.equals(Normalizer.namespace(token))) {
-			return; // 本来就合法：不改写
-		}
-		report.step("ITEM_PREDICATE(" + segment.argumentName() + ") 仅 ID 改名 " + token + " -> " + resolved);
-		replacements.add(new Replacement(segment.start(), segment.end(), resolved,
-			List.of(Expectation.itemPredicateId(segment.argumentName(), resolved, command))));
+		return new ModernItem(rendered, componentIds);
 	}
 
 	/** /summon、选择器 nbt=、/data merge entity（ENTITY）：注入 id -> equipment / active_effects。 */
@@ -363,6 +408,11 @@ public final class LegacyTranslator {
 			fixed.remove("id");
 		}
 		applyPatches(PayloadKind.ENTITY, before, fixed, id, report);
+		Set<String> removed = Set.of();
+		if (segment.predicate()) {
+			// 选择器 nbt= 是谓词：所有键都要匹配，旧键残留会让条件永远不成立（报告 §2.5）
+			removed = PredicateCleanup.strip(fixed, report);
+		}
 		if (fixed.equals(before)) {
 			report.warn("ENTITY 载荷翻译后无变化（DFU 与补丁都未覆盖，" + reason + "），不采用");
 			return;
@@ -373,7 +423,8 @@ public final class LegacyTranslator {
 			report.warn("选择器 nbt= 无法确定实体类型，已用合成 id " + id + " 触发 DFU，输出里不带 id");
 		}
 		replacements.add(new Replacement(segment.start(), segment.end(), fixed.toString(),
-			List.of(Expectation.compound(PayloadKind.ENTITY, segment.argumentName(), entityKeys(before), before.toString()))));
+			List.of(Expectation.compound(PayloadKind.ENTITY, segment.argumentName(), entityKeys(before), removed,
+				before.toString()))));
 	}
 
 	/** /data merge block（BLOCK_ENTITY）。 */

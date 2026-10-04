@@ -62,10 +62,17 @@ final class Verifier {
 		switch (expectation.kind()) {
 			case ITEM_PREDICATE -> {
 				// 物品谓词在 26.3 只暴露 Predicate<ItemStack>，读不回物品 ID：
-				// 用 A/B 断言 —— 原命令必须解析失败（证明确实需要改名），译文已由调用方 reparse 通过。
+				// 1) 断言译文里该参数就是预期的现代 token；2) 用 A/B 断言 —— 原命令必须解析失败 +
+				//    译文 reparse 通过（两者合起来证明改名/转换确有必要且有效）。
 				if (!(value instanceof ItemPredicateArgument.Result)) {
 					report.warn("验证失败：物品谓词参数解析成了 "
 						+ (value == null ? "null" : value.getClass().getSimpleName()));
+					return false;
+				}
+				String actualToken = segment.text(translated).trim();
+				if (expectation.itemId() != null && !actualToken.equals(expectation.itemId())) {
+					report.warn("验证失败：物品谓词译文与预期不符，实际 '" + actualToken + "'，预期 '"
+						+ expectation.itemId() + "'");
 					return false;
 				}
 				if (dispatcher != null && expectation.legacySnbt() != null) {
@@ -155,7 +162,14 @@ final class Verifier {
 						return false;
 					}
 				}
-				report.step("验证 " + expectation.kind() + "：" + tag.keySet() + "，产物键=" + expectation.keys());
+				for (String absent : expectation.absentKeys()) {
+					if (tag.contains(absent)) {
+						report.warn("验证失败：谓词载荷里旧键 " + absent + " 没有被删掉，nbt= 会永远不命中 -> " + tag);
+						return false;
+					}
+				}
+				report.step("验证 " + expectation.kind() + "：" + tag.keySet() + "，产物键=" + expectation.keys()
+					+ (expectation.absentKeys().isEmpty() ? "" : "，已删除旧键=" + expectation.absentKeys()));
 				return true;
 			}
 			case BLOCK_STATE -> {

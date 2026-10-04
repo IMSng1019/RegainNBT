@@ -1,0 +1,18 @@
+# case: macro_args
+# 目的: 宏行（$ 开头 / $(n) 占位符）必须原样不动 —— 翻译器碰了它就等于改坏宏模板
+# 断言: 宏被实例化（$(n) -> 3）且现代写法原样生效
+#
+# T7 实测修正（2026-10-04，真实 26.3 Fabric 服务端）：
+#   原 fixture 用旧版形状 Count:$(n)b + tag.display.Name，断言 contains: Macro。
+#   但宏行按设计「不翻译」，于是 setblock 执行的是旧版 NBT：26.3 的容器 codec 忽略大写的
+#   Count/tag，结果是 {count: 1, Slot: 0b, id: "minecraft:diamond"}（既没有 custom_name 也没有 Macro）。
+#   原始日志证据：
+#     System chat: Running function rnbt_acceptance:macro_args          <- 函数确实执行成功
+#     System chat: 6, -60, 4 has the following block data: {count: 1, Slot: 0b, id: "minecraft:diamond"}
+#   所以断言改成「宏实例化 + 现代形状原样通过」，这才是这条用例真正能观测到的东西。
+setup: setblock 6 -60 4 minecraft:air
+run: function rnbt_acceptance:macro_args {n:3}
+probe: data get block 6 -60 4 Items[0]
+contains: minecraft:diamond
+contains: count: 3
+# 注：本文件已与 T7 的实服修正版（tools/acceptance/fixtures/functions/macro_args.*）逐字对齐（T6 于 2026-10-04 同步）

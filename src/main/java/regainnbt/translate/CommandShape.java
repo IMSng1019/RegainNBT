@@ -43,7 +43,14 @@ public final class CommandShape {
 	 * @param entityId     实体类型 id（/summon 的 entity 参数、选择器 type= 提示；可能为 null）
 	 * @param note         定位依据（诊断用）
 	 */
-	public record Segment(PayloadKind kind, int start, int end, String argumentName, String entityId, String note) {
+	public record Segment(PayloadKind kind, int start, int end, String argumentName, String entityId, String note,
+			boolean predicate) {
+
+		/** 非谓词载荷的便捷构造（写数据：/summon、/data merge ...）。 */
+		public Segment(PayloadKind kind, int start, int end, String argumentName, String entityId, String note) {
+			this(kind, start, end, argumentName, entityId, note, false);
+		}
+
 		public String text(String command) {
 			return command.substring(start, Math.min(end, command.length()));
 		}
@@ -338,10 +345,23 @@ public final class CommandShape {
 		return true;
 	}
 
-	/** 物品谓词 token 只认纯 ID：没有现代的 [ 组件谓词，也没有 # 标签。 */
+	/**
+	 * 物品谓词 token：纯 ID 或 1.20.4 的 {@code id{...}} 写法；
+	 * 现代组件谓词 {@code id[...]} 与标签 {@code #tag} 都不动。
+	 * 注意：旧 NBT 内部也有 [ ]（Enchantments/Items 列表），所以只能在**顶层 { } 之前**找方括号。
+	 */
 	private static boolean isPredicateToken(String payload) {
 		String t = payload.trim();
-		return !t.isEmpty() && t.indexOf('[') < 0 && t.indexOf('#') < 0 && t.indexOf('{') < 0 && isItemToken(t);
+		if (t.isEmpty() || t.indexOf('#') >= 0) {
+			return false;
+		}
+		if (SnbtScanner.firstTopLevelChar(t, '{') >= 0) {
+			return true; // id{...}：NBT 内部可以带 [ ] 列表/数组
+		}
+		if (t.indexOf('[') >= 0) {
+			return false; // 现代 id[组件=...]
+		}
+		return isItemToken(t);
 	}
 
 	private static PayloadKind kindOf(com.mojang.brigadier.arguments.ArgumentType<?> type) {
@@ -437,8 +457,9 @@ public final class CommandShape {
 			i = valueEnd;
 		}
 		if (nbtStart >= 0 && nbtEnd > nbtStart && selector.charAt(nbtStart) == '{') {
+			// 选择器 nbt= 是**谓词**：所有键都要匹配，旧键残留会导致永远不命中（PredicateCleanup 会删旧键）
 			out.add(new Segment(PayloadKind.ENTITY, absStart + nbtStart, absStart + nbtEnd, argumentName, typeHint,
-				"选择器 nbt=" + (negated ? "(取反)" : "")));
+				"选择器 nbt=" + (negated ? "(取反)" : ""), true));
 		}
 	}
 

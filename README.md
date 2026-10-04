@@ -21,8 +21,13 @@
 | `CompoundTagArgument` | /summon、/data merge | **解析通过但静默失效** | 意图检测 → 提前走旧路 |
 | `BlockStateArgument` | /setblock、/fill | **解析通过但静默失效** | 意图检测 → 提前走旧路 |
 | `NbtPathArgument` | /data get/modify、/execute if data | 能解析、取不到值 | 检测 + 告警（路径不自动改写） |
-| `EntityArgument` 的 `nbt=` | /kill @e[nbt=...]、/execute if entity | **解析通过但静默失效** | 意图检测 → 提前走旧路 |
+| `EntityArgument` 的 `nbt=` | /kill @e[nbt=...]、/execute if entity | **解析通过但静默失效** | 意图检测 → 提前走旧路；谓词里的旧键会被删掉（见下） |
+| `ItemPredicateArgument` | /clear、/execute if items | 旧 ID / 旧 NBT 硬报错 | 纯 ID 改名 + `id{旧NBT}` 走完整物品链 |
 | `ComponentArgument` | /tellraw、/title | 引号 JSON 变成字面量 | 意图检测 → 转 SNBT 组件 |
+
+> **谓词 vs 写数据**：`nbt={...}` 这类**谓词**要求所有列出的键都匹配。26.3 的实体 NBT 里已经没有 `HandItems`/`ArmorItems`/`Attributes` 了，
+> 所以翻译谓词时 RegainNBT 会**删掉这些已无读取方的旧键**（仅当对应的现代键确实生成出来时才删，否则会把「永不命中」变成「匹配所有实体」），
+> `nbt={HandItems:[...]}` 因此能真正匹配到现代实体。`/summon`、`/data merge` 这类**写数据**的载荷则保留旧键（报告 §2.5：残留无害）。
 
 翻译本身**不是**我们写的映射表：调用原版 DataFixerUpper（`References.ITEM_STACK / ENTITY / BLOCK_ENTITY`）。
 RegainNBT 负责的是**接线**（规范化输入形状、按参数类型定位片段、序列化回目标语法、验证后采用）
