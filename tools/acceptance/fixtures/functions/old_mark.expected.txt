@@ -1,0 +1,6 @@
+# case: old_mark
+# 目的: 显式 old. 前缀在函数加载期也必须生效（EXPLICIT_MARK -> 旧路）
+setup: setblock 6 -60 6 minecraft:air
+run: function rnbt_acceptance:old_mark
+probe: data get block 6 -60 6 Items[0]
+contains: minecraft:custom_name

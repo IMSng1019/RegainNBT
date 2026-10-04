@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "comment": "RegainNBT 内置 ID 改名表。只收录「在目标版本里已经不合法、但有确定替代名」的名字；运行时先查 BuiltInRegistries，再问原版 DFU（References.ITEM_NAME/BLOCK_NAME），最后才查本表。由 tools/audit/generate-id-renames.ps1 生成，不要手改（要补条目请改 tools/audit/manual-fixes.json）。",
+  "sourceVersion": "1.20.4 (data version 3700)",
+  "targetVersion": "26.3 (data version 5023)",
+  "generatedAt": "2026-10-04T09:37:46.960818300Z",
+  "generatedBy": "tools/audit/IdRenameAudit.java",
+  "manualFixes": "tools/audit/manual-fixes.json",
+  "detail": "tools/audit/reports/id_renames.full.json",
+  "stats": {
+    "items": 3,
+    "blocks": 2,
+    "itemsDfuDerived": 2,
+    "itemsManual": 1,
+    "blocksDfuDerived": 1,
+    "blocksManual": 1,
+    "itemsDfuMissedNeedingManual": 1,
+    "blocksDfuMissedNeedingManual": 1,
+    "itemsUnresolved": 0,
+    "blocksUnresolved": 0
+  },
+  "items": {
+    "minecraft:chain": "minecraft:iron_chain",
+    "minecraft:grass": "minecraft:short_grass",
+    "minecraft:scute": "minecraft:turtle_scute"
+  },
+  "blocks": {
+    "minecraft:chain": "minecraft:iron_chain",
+    "minecraft:grass": "minecraft:short_grass"
+  }
+}

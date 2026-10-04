@@ -1,0 +1,8 @@
+# case: d1_legacy_container
+# 目的: 旧版物品 NBT（Items / 大写 Slot / Count / tag.display）在函数加载期被翻译成 components
+# 说明: 这条命令在新版下「解析成功但语义静默失效」——不翻译的话方块里读不到 custom_name
+setup: setblock 6 -60 1 minecraft:air
+run: function rnbt_acceptance:d1_legacy_container
+probe: data get block 6 -60 1 Items[0]
+contains: minecraft:custom_name
+contains: count: 3

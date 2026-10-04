@@ -1,0 +1,63 @@
+{
+  "sourceVersion": "1.20.4 (data version 3700)",
+  "targetVersion": "26.3 (data version 5023)",
+  "generatedAt": "2026-10-04T09:37:46.963532100Z",
+  "items": {
+    "namesChecked": 1313,
+    "domain_1_20_4_alreadyValid": 1310,
+    "domain_pre_1_20_3_checked": 1,
+    "domain_pre_1_20_3_alreadyValid": 0,
+    "renamedByDfu": 2,
+    "dfuRenamedToInvalidTarget": 0,
+    "filledByManual": 1,
+    "manualTargetInvalid": 0,
+    "unresolved": 0,
+    "table": {
+      "minecraft:chain": {
+        "to": "minecraft:iron_chain",
+        "source": "dfu",
+        "domain": "1.20.4",
+        "dfuRawResult": "minecraft:iron_chain"
+      },
+      "minecraft:grass": {
+        "to": "minecraft:short_grass",
+        "source": "manual",
+        "domain": "pre-1.20.3",
+        "note": "manual (DFU missed it)"
+      },
+      "minecraft:scute": {
+        "to": "minecraft:turtle_scute",
+        "source": "dfu",
+        "domain": "1.20.4",
+        "dfuRawResult": "minecraft:turtle_scute"
+      }
+    },
+    "needsManualFix": []
+  },
+  "blocks": {
+    "namesChecked": 1059,
+    "domain_1_20_4_alreadyValid": 1057,
+    "domain_pre_1_20_3_checked": 1,
+    "domain_pre_1_20_3_alreadyValid": 0,
+    "renamedByDfu": 1,
+    "dfuRenamedToInvalidTarget": 0,
+    "filledByManual": 1,
+    "manualTargetInvalid": 0,
+    "unresolved": 0,
+    "table": {
+      "minecraft:chain": {
+        "to": "minecraft:iron_chain",
+        "source": "dfu",
+        "domain": "1.20.4",
+        "dfuRawResult": "minecraft:iron_chain"
+      },
+      "minecraft:grass": {
+        "to": "minecraft:short_grass",
+        "source": "manual",
+        "domain": "pre-1.20.3",
+        "note": "manual (DFU missed it)"
+      }
+    },
+    "needsManualFix": []
+  }
+}

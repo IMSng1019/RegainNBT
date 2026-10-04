@@ -1,0 +1,6 @@
+# case: comment_and_blank
+# 目的: # 注释（哪怕含旧版 NBT 文本）与空行必须原样跳过，后面的旧版行照常翻译
+setup: setblock 6 -60 3 minecraft:air
+run: function rnbt_acceptance:comment_and_blank
+probe: data get block 6 -60 3 Items[0]
+contains: minecraft:custom_name

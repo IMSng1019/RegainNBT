@@ -1,0 +1,10 @@
+{
+  "_comment": "1.20.4 -> 26.3 ID renames that vanilla DFU (References.ITEM_NAME / BLOCK_NAME) does NOT perform. Filled in by hand after running tools/audit/generate-id-renames.ps1 and reading tools/audit/out/unresolved-*.txt. The generator merges this into src/main/resources/regainnbt/id_renames.json (do not edit that file by hand).",
+  "_verification": "Every target here must be a valid id in the 26.3 BuiltInRegistries; the generator rejects entries whose target is invalid, and IdRenames re-validates at runtime.",
+  "items": {
+    "minecraft:grass": "minecraft:short_grass"
+  },
+  "blocks": {
+    "minecraft:grass": "minecraft:short_grass"
+  }
+}

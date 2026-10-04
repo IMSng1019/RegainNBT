@@ -1,0 +1,38 @@
+RegainNBT ID rename audit
+=========================
+generated      : 2026-10-04T09:37:46.966178800Z
+domain 1.20.4  : tools\audit\data\names-items-1.20.4.txt (1313 names)
+               : tools\audit\data\names-blocks-1.20.4.txt (1059 names)
+domain legacy  : tools\audit\data\extra-legacy-names.txt (1 names)
+manual fixes   : tools\audit\manual-fixes.json
+source version : 1.20.4 / data version 3700
+target version : 26.3 / data version 5023
+target registry: items=1658 blocks=1286
+
+--- ITEMS ---
+names checked (1.20.4 domain)        : 1312
+  still valid in target (no-op)      : 1310
+names checked (pre-1.20.3 domain)    : 1
+  still valid in target (no-op)      : 0
+invalid -> DFU renamed it            : 2
+invalid -> DFU result ALSO invalid   : 0
+DFU missed (manual fix required)     : 1   (filled by manual-fixes.json: 1, still unresolved: 0)
+table entries written                : 3
+
+  minecraft:chain                    -> minecraft:iron_chain               [dfu    domain=1.20.4]
+  minecraft:grass                    -> minecraft:short_grass              [manual domain=pre-1.20.3]  # manual (DFU missed it)
+  minecraft:scute                    -> minecraft:turtle_scute             [dfu    domain=1.20.4]
+
+--- BLOCKS ---
+names checked (1.20.4 domain)        : 1058
+  still valid in target (no-op)      : 1057
+names checked (pre-1.20.3 domain)    : 1
+  still valid in target (no-op)      : 0
+invalid -> DFU renamed it            : 1
+invalid -> DFU result ALSO invalid   : 0
+DFU missed (manual fix required)     : 1   (filled by manual-fixes.json: 1, still unresolved: 0)
+table entries written                : 2
+
+  minecraft:chain                    -> minecraft:iron_chain               [dfu    domain=1.20.4]
+  minecraft:grass                    -> minecraft:short_grass              [manual domain=pre-1.20.3]  # manual (DFU missed it)
+

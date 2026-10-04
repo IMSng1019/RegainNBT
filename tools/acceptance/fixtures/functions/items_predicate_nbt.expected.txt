@@ -1,0 +1,13 @@
+# case: items_predicate_nbt
+# 目的: 1.20.4 的「物品谓词 + NBT」写法 diamond_sword{Enchantments:[...]} 必须被翻译成
+#       minecraft:diamond_sword[minecraft:enchantments={...}]（T1 的 B 修复）。
+#       用 execute if items **block** 变体：服务端控制台没有玩家，entity @s 那版跑不了。
+# 判别设计:
+#   6 -60 8 的箱子里放【现代形状】的附魔钻石剑（setup 用 components，不依赖翻译）；
+#   谓词行若没被翻译 -> 该行在加载期解析失败（trailing data）-> 函数加载失败 / 条件不成立；
+#   谓词行若被翻译 -> 条件命中 -> 往 6 -60 9 的空箱子里放一颗钻石。
+setup: setblock 6 -60 8 minecraft:chest{Items:[{Slot:0b,id:"minecraft:diamond_sword",count:1b,components:{"minecraft:enchantments":{"minecraft:sharpness":2}}}]}
+setup: setblock 6 -60 9 minecraft:chest
+run: function rnbt_acceptance:items_predicate_nbt
+probe: data get block 6 -60 9 Items[0]
+contains: minecraft:diamond
