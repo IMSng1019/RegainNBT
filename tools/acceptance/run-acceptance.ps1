@@ -31,7 +31,9 @@ param(
     [int]$CommandWaitMs = 1200,
     [switch]$SkipDownload,
     [switch]$KeepWorld,
-    [switch]$KeepRun
+    [switch]$KeepRun,
+    # Killing leftover servers can destroy a teammate's run, so it is opt-in.
+    [switch]$ForceCleanup
 )
 
 $ErrorActionPreference = "Continue"
@@ -92,14 +94,25 @@ function Stop-ServerProcess($proc) {
     }
 }
 
-# Self-heal: a leftover acceptance server from an aborted run would make the next boot fail to bind.
+# A leftover server (from an aborted run, or a teammate's run) would make this boot fail to bind
+# port 25565. Never kill it silently: refuse by default, -ForceCleanup to take over.
 $leftovers = Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -like "*fabric-server-launch.jar*" }
-foreach ($leftover in $leftovers) {
-    Write-Output ("=== killing leftover server pid " + $leftover.ProcessId)
-    Stop-Process -Id $leftover.ProcessId -Force -ErrorAction SilentlyContinue
+if ($leftovers) {
+    if ($ForceCleanup) {
+        foreach ($leftover in $leftovers) {
+            Write-Output ("=== killing leftover server pid " + $leftover.ProcessId)
+            Stop-Process -Id $leftover.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Seconds 3
+    } else {
+        foreach ($leftover in $leftovers) {
+            Write-Output ("a fabric server is already running: pid " + $leftover.ProcessId)
+        }
+        Write-Output "refusing to start (it would fight for port 25565); rerun with -ForceCleanup to take over"
+        exit 2
+    }
 }
-if ($leftovers) { Start-Sleep -Seconds 3 }
 
 # ---------------------------------------------------------------------------
 # 1. run-server/ layout
@@ -159,6 +172,23 @@ if (-not $KeepWorld) {
     if (Test-Path $worldDir) { Remove-Item $worldDir -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Output "=== world reset (deterministic reruns)"
 }
+
+# ---------------------------------------------------------------------------
+# 3b. datapack fixture: one function line with legacy NBT, translated at load time (T6 path).
+#     It must exist before the world is generated; the folder survives world creation.
+#     pack_format 121 = 26.3 data pack version (SharedConstants#packVersion(SERVER_DATA), Probe5).
+#     Both "function/" (1.21+) and "functions/" (older) are written so the fixture works on either.
+# ---------------------------------------------------------------------------
+$packRoot = Join-Path $ServerDir "world\datapacks\rnbt_acceptance"
+New-Item -ItemType Directory -Force -Path $packRoot | Out-Null
+Set-Content -Path (Join-Path $packRoot "pack.mcmeta") -Encoding ASCII -Value '{ "pack": { "pack_format": 121, "description": "RegainNBT acceptance" } }'
+$functionLine = 'setblock 6 -60 0 minecraft:chest{Items:[{Slot:0b,id:"minecraft:diamond",Count:3b}]}'
+foreach ($dirName in @("function", "functions")) {
+    $fnDir = Join-Path $packRoot ("data\rnbt_acceptance\" + $dirName)
+    New-Item -ItemType Directory -Force -Path $fnDir | Out-Null
+    Set-Content -Path (Join-Path $fnDir "legacy.mcfunction") -Encoding ASCII -Value $functionLine
+}
+Write-Output "=== datapack fixture written (rnbt_acceptance:legacy)"
 
 # ---------------------------------------------------------------------------
 # 4. mods: our jar + fabric-api (must be the 26.3 build!)
@@ -242,6 +272,8 @@ $script:cmds = @(
     $summon,
     "/data get entity @e[type=minecraft:zombie,limit=1]",
     $control,
+    "/function rnbt_acceptance:legacy",
+    "/data get block 6 -60 0 Items[0]",
     "/stop"
 )
 $script:preCmds = @("/regainnbt status")
@@ -293,7 +325,9 @@ $wDataCmd = Window 8
 $wSummon = Window 9
 $wDataEntity = Window 10
 $wControl = Window 11
-$wStop = Window 12
+$wFunction = Window 12
+$wDataFunction = Window 13
+$wStop = Window 14
 
 # ---------------------------------------------------------------------------
 # 8. assertions
@@ -320,6 +354,8 @@ Add-Check "zombie mainhand holds the sword with enchantments" (($wDataEntity.Con
 
 $modernOk = ($wControl.Contains("No player was found")) -and (-not $wControl.Contains("trailing data"))
 Add-Check "control: modern syntax is NOT rewritten (only vanilla no-player error)" $modernOk $wControl
+Add-Check "T6 datapack function loaded (rnbt_acceptance:legacy)" (($wFunction.Contains("Unknown function") -eq $false) -and ($wFunction.Contains("System chat"))) $wFunction
+Add-Check "T6 function line translated at load time (Count:3b -> count:3)" (($wDataFunction.Contains("count: 3")) -and (-not $wDataFunction.Contains("Count: 3b"))) $wDataFunction
 Add-Check "/stop accepted" (($wStop.Contains("Stopping the server")) -or ($wStop.Contains("Saving"))) $wStop
 
 # ---------------------------------------------------------------------------

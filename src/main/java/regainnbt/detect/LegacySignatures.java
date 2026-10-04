@@ -23,8 +23,8 @@ import net.minecraft.nbt.Tag;
  *   {CustomName:"Bob"}             -> MODERN（两代同义：字面量 Bob）
  *   {HandItems:[{}]}               -> LEGACY（旧装备键，现代为 equipment）
  *   {equipment:{mainhand:{...}}}   -> MODERN
- *   {Items:[{slot:0b,id:"...",count:1}]}  -> MODERN（现代物品格式）
- *   {Items:[{Slot:0b,id:"...",Count:1b}]} -> LEGACY（旧物品格式）
+ *   {Items:[{Slot:0b,id:"...",count:1}]}  -> MODERN（现代容器条目：Slot 大写 + count 小写 + components）
+ *   {Items:[{Slot:0b,id:"...",Count:1b}]} -> LEGACY（旧物品格式：大写 Count / tag / display…）
  * </pre>
  *
  * <p>键表来源：docs/feasibility-report.md §2.13（101 个 1.20.4 常用键中 35 个已彻底失去读取方）
@@ -184,7 +184,9 @@ public final class LegacySignatures {
 		// 旧物品栈内部（只在 ITEM_STACK 上下文生效，避免误伤自定义数据）
 		// ------------------------------------------------------------------
 		rule("Count", Shape.NUMBER, ITEM, "旧版物品数量键 Count（现代为小写 count）");
-		rule("Slot", Shape.NUMBER, ITEM, "旧版物品槽位键 Slot（现代为小写 slot）");
+		// 注意：大写 Slot **不是**旧版信号（T6/T7 实测）：26.3 的方块实体容器条目仍然是
+		// {Slot:0b,id:"...",count:N,components:{...}}（ContainerHelper + ItemStackWithSlot），
+		// 也就是说「条目里有 Slot」两代都成立。判别旧版只能靠大写 Count / tag / display 等确凿旧形状。
 		rule("tag", Shape.COMPOUND, ITEM, "旧版物品 tag 包装（现代为 components）");
 
 		Map<String, KeyRule> map = new LinkedHashMap<>();

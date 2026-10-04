@@ -51,6 +51,9 @@
 
 - **纯 ID 改名**：`/give Steve scute` → 翻译成 `give Steve minecraft:turtle_scute`（随后才报 "No player was found"，证明解析已通过）；
   `/regainnbt why give Steve scute` 打印新版原始错误 `Unknown item 'minecraft:scute'` + 翻译路径。
+- **物品谓词**（`ItemPredicateArgument`，另一种没有 NBT 的参数）：真实服务端上
+  `execute if items block ... container.* grass run say RNBT-ITEMS-LEGACY-OK` 被翻译成 `... container.* minecraft:short_grass ...` 并**成功触发**，
+  与直接用现代 ID 的对照命令输出完全一致；`clear Steve grass` → `clear Steve minecraft:short_grass`、`clear Steve scute` → `minecraft:turtle_scute`，全程无 `Unknown item`。
 - **数据包函数加载期翻译**：往 `world/datapacks` 放一个含旧写法的 `.mcfunction`，`/reload` 后函数**加载期**即被逐行翻译
   （日志出现在 Worker-Main 线程）：`summon ... {CustomName:'{"text":"FuncZombie"}',HandItems:[...]}` → `{CustomName:{text:"FuncZombie"},...,equipment:{mainhand:{...}}}`；
   执行后实体数据 `CustomName: "FuncZombie"`（不再是 JSON 字面量）、`equipment.mainhand` 有附魔剑；`setblock ... chest{Items:[{Slot:0b,...,Count:7b}]}` → `{count: 7}`。
